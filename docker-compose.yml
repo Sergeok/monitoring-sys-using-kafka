@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: my_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:9092,OUTSIDE://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:9092,OUTSIDE://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    restart: always
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+
+  metrics-consumer:
+    build:
+      dockerfile: Dockerfile
+      context: ./kafka-consumer
+    container_name: metrics-consumer
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/mydatabase
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "8081:8088"
+
+  metrics-producer-1:
+    build:
+      dockerfile: Dockerfile
+      context: ./kafka-producer
+    container_name: metrics-producer-1
+    environment:
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_METRIC_SOURCE: node-1
+    ports:
+      - "8082:8089"
+
+  metrics-producer-2:
+    build:
+      dockerfile: Dockerfile
+      context: ./kafka-producer
+    container_name: metrics-producer-2
+    environment:
+      SPRING_KAFKA_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_METRIC_SOURCE: node-2
+    ports:
+      - "8083:8089"
+
+volumes:
+  pgdata:
